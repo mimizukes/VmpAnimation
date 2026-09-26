@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>あさひモス · Asahi Moth</title>
+<meta name="description" content="A short surreal anime animation about a blonde vampire girl in modern Japan. Canvas + WebAudio, no dependencies.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@400;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --red: #c3152f;
+    --ink: #0b0b0f;
+    --paper: #f3eee4;
+    --gold: #f6d98a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: #000; color: var(--paper);
+    overflow: hidden; -webkit-font-smoothing: antialiased;
+    font-family: "Cormorant Garamond", "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  }
+  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; }
+  canvas { display: block; background: #000; }
+  body.playing.idle { cursor: none; }
+
+  /* start screen */
+  #start {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: #0b0b0f; z-index: 10; transition: opacity .6s ease;
+  }
+  #start.gone { opacity: 0; pointer-events: none; }
+  #start .wrap { position: relative; width: min(92vw, 980px); display: grid; grid-template-columns: 1fr auto; gap: 0 48px; align-items: end; }
+  #start .jp {
+    font-family: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+    font-weight: 800; font-size: clamp(56px, 11vw, 132px); line-height: .95; letter-spacing: .04em; color: var(--paper);
+  }
+  #start .jp span { color: var(--red); }
+  #start .en { font-size: clamp(16px, 2.2vw, 22px); letter-spacing: .5em; text-transform: uppercase; margin-top: 18px; color: #bdb6a8; }
+  #start .side {
+    writing-mode: vertical-rl; font-family: "Shippori Mincho B1", serif; font-size: 18px; letter-spacing: .3em; color: #8d877c;
+    border-left: 1px solid #3a3730; padding-left: 14px; height: 220px;
+  }
+  #start .row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: center; margin-top: 48px; }
+  #play {
+    appearance: none; border: 0; background: var(--red); color: #fff; cursor: pointer;
+    font: 600 22px/1 "Cormorant Garamond", serif; letter-spacing: .3em; text-transform: uppercase;
+    padding: 20px 34px 20px 40px; transition: transform .15s ease, background .15s ease;
+  }
+  #play:hover { background: #e01d3b; transform: translateY(-1px); }
+  #play:disabled { background: #3a3730; cursor: wait; }
+  #start .hint { font-size: 16px; color: #8d877c; line-height: 1.6; letter-spacing: .04em; }
+  #start .hint b { color: #bdb6a8; font-weight: 600; }
+  #start .warn { grid-column: 1 / -1; margin-top: 26px; font-size: 14px; color: #6f6a60; letter-spacing: .06em; }
+
+  /* control bar */
+  #bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; padding: 26px 24px 18px;
+    background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0));
+    display: flex; align-items: center; gap: 16px; opacity: 0; transition: opacity .35s ease;
+  }
+  body.playing:not(.idle) #bar, body.paused #bar { opacity: 1; }
+  #bar button {
+    appearance: none; background: none; border: 0; color: var(--paper); cursor: pointer;
+    font: 600 15px/1 "Cormorant Garamond", serif; letter-spacing: .18em; text-transform: uppercase; padding: 6px 4px; opacity: .8;
+  }
+  #bar button:hover { opacity: 1; }
+  #track { flex: 1; height: 18px; position: relative; cursor: pointer; }
+  #track::before { content: ""; position: absolute; left: 0; right: 0; top: 8px; height: 2px; background: rgba(255,255,255,.22); }
+  #fill { position: absolute; left: 0; top: 8px; height: 2px; background: var(--red); width: 0; }
+  #time { font: 500 15px/1 "Cormorant Garamond", serif; letter-spacing: .1em; color: #cfc8ba; min-width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
+  @media (max-width: 640px) {
+    #bar { flex-wrap: wrap; gap: 6px 14px; padding: 18px 16px 14px; }
+    #track { order: -1; flex-basis: 100%; }
+    #time { margin-right: auto; min-width: 0; text-align: left; }
+    #bar button { font-size: 13px; letter-spacing: .12em; }
+    #start .wrap { grid-template-columns: 1fr; }
+    #start .side { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c" aria-label="Asahi Moth animation"></canvas></div>
+
+<div id="start">
+  <div class="wrap">
+    <div>
+      <div class="jp">あさひ<span>モス</span></div>
+      <div class="en">Asahi Moth &nbsp;·&nbsp; 其ノ壹</div>
+    </div>
+    <div class="side">午前二時四十七分</div>
+    <div class="row">
+      <button id="play" disabled>Loading</button>
+      <div class="hint"><b>Space</b> pause &nbsp; <b>← →</b> seek &nbsp; <b>F</b> fullscreen &nbsp; <b>M</b> mute &nbsp; <b>S</b> subtitles<br>Headphones recommended. Runtime about three and a half minutes.</div>
+    </div>
+    <div class="warn">Contains quick cuts and bright full screen colour changes.</div>
+  </div>
+</div>
+
+<div id="bar">
+  <button id="bPlay">Pause</button>
+  <div id="track"><div id="fill"></div></div>
+  <div id="time">0:00 / 0:00</div>
+  <button id="bSubs">Subs</button>
+  <button id="bMute">Mute</button>
+  <button id="bFull">Full</button>
+</div>
+
+<script>
+/*__SCRIPTS__*/
+</script>
+</body>
+</html>
